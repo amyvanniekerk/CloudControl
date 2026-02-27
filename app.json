@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "CloudControl",
-    "slug": "CloudControl",
+    "slug": "cloudcontrol",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -20,10 +20,23 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "package": "com.cloudcontrol.cloudcontrol"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "66844217-347b-4012-94f2-49469801d602"
+      }
+    },
+    "owner": "cloudcontrol",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/66844217-347b-4012-94f2-49469801d602"
     }
   }
 }

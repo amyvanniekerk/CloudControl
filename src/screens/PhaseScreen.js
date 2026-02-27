@@ -21,6 +21,7 @@ export default function PhaseScreen() {
     completedPhases: [],
   });
   const [activeIndex, setActiveIndex] = useState(0);
+  const [phaseStarted, setPhaseStarted] = useState(false);
   const flatListRef = useRef(null);
 
   useFocusEffect(
@@ -53,6 +54,7 @@ export default function PhaseScreen() {
           onPress: async () => {
             const data = await advancePhase();
             setPhaseData(data);
+            setPhaseStarted(false);
             const idx = data.currentPhase - 1;
             setActiveIndex(idx);
             flatListRef.current?.scrollToIndex({ index: idx, animated: true });
@@ -150,13 +152,24 @@ export default function PhaseScreen() {
 
         {/* Below-card content */}
         <View style={styles.belowCard}>
-          {/* Complete Phase button — only show on current phase */}
+          {/* Phase button — only show on current phase */}
           {status === 'current' && (
-            <TouchableOpacity style={styles.advanceBtn} onPress={handleAdvance}>
+            <TouchableOpacity
+              style={styles.advanceBtn}
+              onPress={() => {
+                if (phaseStarted) {
+                  handleAdvance();
+                } else {
+                  setPhaseStarted(true);
+                }
+              }}
+            >
               <Text style={styles.advanceBtnText}>
-                {phaseData.currentPhase >= 4
-                  ? 'Complete Final Phase'
-                  : `Complete Phase ${phaseData.currentPhase}`}
+                {phaseStarted
+                  ? (phaseData.currentPhase >= 4
+                      ? 'Complete Final Phase'
+                      : `Complete Phase ${phaseData.currentPhase}`)
+                  : `Start Phase ${phaseData.currentPhase}`}
               </Text>
             </TouchableOpacity>
           )}

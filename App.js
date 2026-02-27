@@ -1,4 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  Easing,
+} from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -11,6 +18,75 @@ import PhaseScreen from './src/screens/PhaseScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+
+function SplashScreen({ onFinish }) {
+  const spin = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.8)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Fade in
+    Animated.timing(opacity, {
+      toValue: 1,
+      duration: 400,
+      useNativeDriver: true,
+    }).start();
+
+    // Pulse scale
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(scale, {
+          toValue: 1.05,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 0.95,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Spin
+    Animated.loop(
+      Animated.timing(spin, {
+        toValue: 1,
+        duration: 1500,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+
+    // Finish after 2 seconds
+    const timer = setTimeout(() => {
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => onFinish());
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  const rotation = spin.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <Animated.View style={[styles.splash, { opacity }]}>
+      <Animated.View style={[styles.spinnerOuter, { transform: [{ rotate: rotation }, { scale }] }]}>
+        <View style={styles.spinnerTrack} />
+        <View style={styles.spinnerArc} />
+      </Animated.View>
+      <Text style={styles.splashTitle}>CloudControl</Text>
+    </Animated.View>
+  );
+}
 
 function HomeTabs() {
   return (
@@ -51,6 +127,7 @@ function HomeTabs() {
           tabBarIcon: ({ color, size }) => <Ionicons name="bar-chart-outline" size={size} color={color} />,
         }}
       />
+
       <Tab.Screen
         name="Phase"
         component={PhaseScreen}
@@ -63,6 +140,12 @@ function HomeTabs() {
 }
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
+  if (showSplash) {
+    return <SplashScreen onFinish={() => setShowSplash(false)} />;
+  }
+
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -76,3 +159,48 @@ export default function App() {
     </NavigationContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  splash: {
+    flex: 1,
+    backgroundColor: '#FAFAFA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spinnerOuter: {
+    width: 120,
+    height: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 32,
+  },
+  spinnerTrack: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 6,
+    borderColor: '#F0E4F7',
+  },
+  spinnerArc: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 6,
+    borderColor: 'transparent',
+    borderTopColor: '#9C27B0',
+    borderRightColor: '#CE93D8',
+  },
+  splashTitle: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#6A1B9A',
+  },
+  splashSub: {
+    fontSize: 15,
+    color: '#B388C9',
+    fontWeight: '500',
+    marginTop: 8,
+  },
+});
