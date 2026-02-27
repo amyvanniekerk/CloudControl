@@ -1,17 +1,18 @@
 import React, { useState, useCallback, useRef } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  Dimensions,
-  FlatList,
+    View,
+    Text,
+    StyleSheet,
+    ScrollView,
+    TouchableOpacity,
+    Alert,
+    Dimensions,
+    FlatList,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { getPhaseData, advancePhase } from '../storage/store';
-import { PHASES, REPLACEMENT_STRATEGIES, IDENTITY_AFFIRMATION } from '../data/phases';
+import {getPhaseData, advancePhase, startPhase, getSettings, updateSettings} from '../storage/store';
+import { PHASES, REPLACEMENT_STRATEGIES, IDENTITY_AFFIRMATIONS } from '../data/phases';
+import RewardBadge from '../components/RewardBadge';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -21,14 +22,34 @@ export default function PhaseScreen() {
     completedPhases: [],
   });
   const [activeIndex, setActiveIndex] = useState(0);
-  const [phaseStarted, setPhaseStarted] = useState(false);
+  const [phaseRewards, setPhaseRewards] = useState({});
+  const [quitDate, setQuitDate] = useState(null);
   const flatListRef = useRef(null);
+
+    const handleSetQuitDate = async (daysFromNow) => {
+        const target = new Date();
+        target.setDate(target.getDate() + daysFromNow);
+        target.setHours(0, 0, 0, 0);
+        const newDate = target.toISOString();
+        await updateSettings({ quitDate: newDate });
+        setQuitDate(newDate);
+        const formatted = target.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+        Alert.alert('Quit date set!', `You're going nicotine-free on ${formatted}.`);
+    };
+
+  const phaseStarted = !!phaseData.phaseStartedAt;
+  const phaseStartDate = phaseData.phaseStartedAt ? new Date(phaseData.phaseStartedAt) : null;
+  const dayCount = phaseStartDate
+    ? Math.max(1, Math.floor((Date.now() - phaseStartDate.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+    : 0;
 
   useFocusEffect(
     useCallback(() => {
       (async () => {
-        const data = await getPhaseData();
+        const [data, settings] = await Promise.all([getPhaseData(), getSettings()]);
         setPhaseData(data);
+        setPhaseRewards(settings.phaseRewards || {});
+        setQuitDate(settings.quitDate || null);
         const idx = data.currentPhase - 1;
         setActiveIndex(idx);
         setTimeout(() => {
@@ -54,7 +75,6 @@ export default function PhaseScreen() {
           onPress: async () => {
             const data = await advancePhase();
             setPhaseData(data);
-            setPhaseStarted(false);
             const idx = data.currentPhase - 1;
             setActiveIndex(idx);
             flatListRef.current?.scrollToIndex({ index: idx, animated: true });
@@ -86,6 +106,13 @@ export default function PhaseScreen() {
   const renderPhaseCard = ({ item: phase }) => {
     const status = getStatus(phase.id);
     const isActive = status === 'current' || status === 'completed';
+    const requiredDays = phase.durationWeeks * 7;
+    const canComplete = phaseStarted && phaseStartDate
+      ? dayCount >= requiredDays
+      : false;
+    const daysRemaining = phaseStarted && phaseStartDate
+      ? Math.max(0, requiredDays - dayCount)
+      : requiredDays;
 
     return (
       <ScrollView
@@ -118,6 +145,9 @@ export default function PhaseScreen() {
               </View>
             )}
           </View>
+          {status === 'current' && phaseStarted && (
+            <Text style={styles.dayText}>Day {dayCount} of</Text>
+          )}
 
           {/* Weeks */}
           <Text style={[styles.phaseWeeks, !isActive && styles.mutedText]}>
@@ -148,31 +178,87 @@ export default function PhaseScreen() {
               {phase.goal}
             </Text>
           </View>
+
+          {/* Reward */}
+          <RewardBadge reward={phaseRewards[phase.id]} status={status} />
         </View>
 
         {/* Below-card content */}
         <View style={styles.belowCard}>
           {/* Phase button — only show on current phase */}
           {status === 'current' && (
-            <TouchableOpacity
-              style={styles.advanceBtn}
-              onPress={() => {
-                if (phaseStarted) {
-                  handleAdvance();
-                } else {
-                  setPhaseStarted(true);
-                }
-              }}
-            >
-              <Text style={styles.advanceBtnText}>
-                {phaseStarted
-                  ? (phaseData.currentPhase >= 4
-                      ? 'Complete Final Phase'
-                      : `Complete Phase ${phaseData.currentPhase}`)
-                  : `Start Phase ${phaseData.currentPhase}`}
-              </Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                style={[
+                  styles.advanceBtn,
+                  phaseStarted && !canComplete && styles.advanceBtnDisabled,
+                ]}
+                disabled={phaseStarted && !canComplete}
+                onPress={() => {
+                  if (phaseStarted) {
+                    handleAdvance();
+                  } else {
+                    startPhase().then(setPhaseData);
+                  }
+                }}
+              >
+                <Text style={styles.advanceBtnText}>
+                  {phaseStarted
+                    ? (phaseData.currentPhase >= 4
+                        ? 'Complete Final Phase'
+                        : `Complete Phase ${phaseData.currentPhase}`)
+                    : `Start Phase ${phaseData.currentPhase}`}
+                </Text>
+              </TouchableOpacity>
+              {phaseStarted && !canComplete && (
+                <Text style={styles.daysRemainingText}>
+                  {daysRemaining} day{daysRemaining !== 1 ? 's' : ''} remaining
+                </Text>
+              )}
+            </>
           )}
+
+            {phaseData.currentPhase === 4 && (
+                <View style={styles.section}>
+                    <TouchableOpacity
+                        disabled={!quitDate}
+                        onPress={() => { setQuitDate(null); updateSettings({ quitDate: null }); }}
+                    >
+                        <Text style={styles.sectionTitle}>
+                            {quitDate ? 'Change date' : 'Select Target Quit Date'}
+                        </Text>
+                    </TouchableOpacity>
+                    {quitDate ? (
+                        <View style={styles.quitDateSet}>
+                            <Text style={styles.quitDateValue}>
+                                {new Date(quitDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                            </Text>
+                            <Text style={styles.quitDateCountdown}>
+                                {Math.max(0, Math.ceil((new Date(quitDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days to go
+                            </Text>
+                        </View>
+                    ) : (
+                        <View>
+                            <View style={styles.quitDateOptions}>
+                                {[
+                                    { label: 'In 1 week', days: 7 },
+                                    { label: 'In 2 weeks', days: 14 },
+                                    { label: 'In 1 month', days: 30 },
+                                ].map((option) => (
+                                    <TouchableOpacity
+                                        key={option.days}
+                                        style={styles.quitDateBtn}
+                                        onPress={() => handleSetQuitDate(option.days)}
+                                    >
+                                        <Text style={styles.quitDateBtnText}>{option.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+                    )}
+                </View>
+            )
+        }
 
           {/* Replacement Strategies */}
           <Text style={styles.sectionTitle}>Replacement Strategies</Text>
@@ -182,9 +268,11 @@ export default function PhaseScreen() {
             </Text>
           ))}
 
-          {/* Identity */}
+          {/* Motivation Quote — one per phase */}
           <View style={styles.identityCard}>
-            <Text style={styles.identityText}>{IDENTITY_AFFIRMATION}</Text>
+            <Text style={styles.identityText}>
+              {IDENTITY_AFFIRMATIONS[phase.id - 1]}
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -242,16 +330,6 @@ export default function PhaseScreen() {
           index,
         })}
       />
-
-      {/* Swipe hint dots */}
-      <View style={styles.dotsRow}>
-        {PHASES.map((_, i) => (
-          <View
-            key={i}
-            style={[styles.dot, i === activeIndex && styles.dotActive]}
-          />
-        ))}
-      </View>
     </View>
   );
 }
@@ -353,6 +431,12 @@ const styles = StyleSheet.create({
   currentBadgeText: {
     color: '#6A1B9A',
   },
+  dayText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#BA68C8',
+    marginBottom: 2,
+  },
   lockedBadge: {
     backgroundColor: '#E8E8E8',
   },
@@ -443,16 +527,84 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
+  advanceBtnDisabled: {
+    backgroundColor: '#CCCCCC',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   advanceBtnText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  daysRemainingText: {
+    fontSize: 13,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: -12,
+    marginBottom: 20,
+  },
+  section: {
+    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#333',
     marginBottom: 10,
+  },
+  quitDatePrompt: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+  },
+  quitDateOptions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  quitDateBtn: {
+    flex: 1,
+    backgroundColor: '#9C27B0',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  quitDateBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  quitDateSet: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 18,
+    alignItems: 'center',
+    shadowColor: '#9C27B0',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  quitDateLabel: {
+    fontSize: 13,
+    color: '#888',
+    marginBottom: 4,
+  },
+  quitDateValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#6A1B9A',
+    marginBottom: 4,
+  },
+  quitDateCountdown: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#9C27B0',
+  },
+  resetLink: {
+    fontSize: 13,
+    color: '#999',
+    fontWeight: '600',
   },
   strategy: {
     fontSize: 14,

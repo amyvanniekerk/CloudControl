@@ -23,6 +23,15 @@
       },
       "package": "com.cloudcontrol.cloudcontrol"
     },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#9C27B0"
+        }
+      ]
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     },

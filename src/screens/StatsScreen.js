@@ -1,34 +1,59 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { getLogs } from '../storage/store';
 import { getWeeklyStats, getWeeklySummary, bedFreeStreak } from '../utils/stats';
 import WeeklyChart from '../components/WeeklyChart';
 
+const RANGES = [
+  { key: '7d', label: '7 Days', days: 7 },
+  { key: '30d', label: '30 Days', days: 30 },
+  { key: 'all', label: 'All', days: null },
+];
+
 export default function StatsScreen() {
-  const [weeklyStats, setWeeklyStats] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [range, setRange] = useState('7d');
   const [summary, setSummary] = useState(null);
   const [streak, setStreak] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       (async () => {
-        const logs = await getLogs();
-        setWeeklyStats(getWeeklyStats(logs));
-        setSummary(getWeeklySummary(logs));
-        setStreak(bedFreeStreak(logs));
+        const allLogs = await getLogs();
+        setLogs(allLogs);
+        setSummary(getWeeklySummary(allLogs));
+        setStreak(bedFreeStreak(allLogs));
       })();
     }, [])
   );
 
+  const selectedRange = RANGES.find(r => r.key === range);
+  const chartStats = getWeeklyStats(logs, selectedRange.days);
+
   return (
-    <View style={styles.content}>
+    <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} showsVerticalScrollIndicator={false}>
       <Text style={styles.title}>Stats</Text>
 
       {/* Chart */}
       <View style={styles.chartCard}>
-        <WeeklyChart weeklyStats={weeklyStats} />
+        <WeeklyChart weeklyStats={chartStats} />
       </View>
+
+        {/* Range Toggle */}
+        <View style={styles.rangeRow}>
+            {RANGES.map(r => (
+                <TouchableOpacity
+                    key={r.key}
+                    style={[styles.rangeBtn, range === r.key && styles.rangeBtnActive]}
+                    onPress={() => setRange(r.key)}
+                >
+                    <Text style={[styles.rangeBtnText, range === r.key && styles.rangeBtnTextActive]}>
+                        {r.label}
+                    </Text>
+                </TouchableOpacity>
+            ))}
+        </View>
 
       {/* Summary Grid */}
       {summary && (
@@ -72,7 +97,7 @@ export default function StatsScreen() {
           </Text>
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -80,14 +105,41 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     backgroundColor: '#FAFAFA',
+  },
+  contentInner: {
     padding: 24,
     paddingTop: 64,
+    paddingBottom: 40,
   },
   title: {
     fontSize: 24,
     fontWeight: '800',
     color: '#333',
     marginBottom: 20,
+  },
+
+  rangeRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  rangeBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#EEEEEE',
+  },
+  rangeBtnActive: {
+    backgroundColor: '#9C27B0',
+  },
+  rangeBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#999',
+  },
+  rangeBtnTextActive: {
+    color: '#fff',
   },
 
   // Chart card

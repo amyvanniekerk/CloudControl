@@ -34,7 +34,11 @@ export default function WeeklyChart({ weeklyStats }) {
 
   const allValues = weeklyStats.flatMap((d) => [d.sessions, d.cravings, d.nightWakes]);
   const maxVal = Math.max(...allValues, 1);
-  const colWidth = chartWidth / 7;
+  const numDays = weeklyStats.length;
+  const colWidth = chartWidth / numDays;
+  const dynamicBarWidth = Math.max(2, Math.min(BAR_WIDTH, (colWidth - 4) / 3));
+  const dynamicGap = numDays <= 7 ? 3 : 1;
+  const labelInterval = numDays <= 7 ? 1 : numDays <= 14 ? 2 : numDays <= 30 ? 5 : 7;
   const todayKey = dateKey(new Date());
 
   const barHeight = (val) => {
@@ -57,7 +61,9 @@ export default function WeeklyChart({ weeklyStats }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Past 7 Days</Text>
+      <Text style={styles.title}>
+        {numDays <= 7 ? 'Past 7 Days' : numDays <= 30 ? 'Past 30 Days' : `Past ${numDays} Days`}
+      </Text>
 
       {/* Legend */}
       <View style={styles.legend}>
@@ -103,16 +109,18 @@ export default function WeeklyChart({ weeklyStats }) {
 
         {/* Bars */}
         <View style={styles.chartRow}>
-          {weeklyStats.map((day) => {
+          {weeklyStats.map((day, i) => {
             const isToday = day.date === todayKey;
+            const showLabel = isToday || i % labelInterval === 0;
 
             return (
               <View key={day.date} style={[styles.dayCol, { width: colWidth }]}>
-                <View style={styles.barGroup}>
+                <View style={[styles.barGroup, { gap: dynamicGap }]}>
                   <View
                     style={[
                       styles.bar,
                       {
+                        width: dynamicBarWidth,
                         height: barHeight(day.sessions),
                         backgroundColor: COLORS.sessions,
                       },
@@ -122,6 +130,7 @@ export default function WeeklyChart({ weeklyStats }) {
                     style={[
                       styles.bar,
                       {
+                        width: dynamicBarWidth,
                         height: barHeight(day.cravings),
                         backgroundColor: COLORS.cravings,
                       },
@@ -131,6 +140,7 @@ export default function WeeklyChart({ weeklyStats }) {
                     style={[
                       styles.bar,
                       {
+                        width: dynamicBarWidth,
                         height: barHeight(day.nightWakes),
                         backgroundColor: COLORS.nightWakes,
                       },
@@ -138,11 +148,13 @@ export default function WeeklyChart({ weeklyStats }) {
                   />
                 </View>
 
-                <View style={[styles.dayLabelWrap, isToday && styles.todayLabelWrap]}>
-                  <Text style={[styles.dayLabel, isToday && styles.todayLabel]}>
-                    {isToday ? 'Today' : day.label}
-                  </Text>
-                </View>
+                {showLabel && (
+                  <View style={[styles.dayLabelWrap, isToday && styles.todayLabelWrap]}>
+                    <Text style={[styles.dayLabel, isToday && styles.todayLabel]}>
+                      {isToday ? 'Today' : day.label}
+                    </Text>
+                  </View>
+                )}
               </View>
             );
           })}
@@ -155,7 +167,6 @@ export default function WeeklyChart({ weeklyStats }) {
 const styles = StyleSheet.create({
   container: {
     padding: 16,
-    overflow: 'hidden',
   },
   title: {
     fontSize: 16,

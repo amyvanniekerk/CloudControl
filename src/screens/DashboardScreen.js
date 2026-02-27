@@ -1,9 +1,12 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Animated } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { getLogs, getPhaseData } from '../storage/store';
-import { getTodayLogs, countByType, nightWakeCount, bedFreeStreak } from '../utils/stats';
+import { getLogs, getPhaseData, getSettings, getTodayCheckin, addCheckin, getCheckins, getPurchases, addPurchase } from '../storage/store';
+import { getTodayLogs, countByType, nightWakeCount, bedFreeStreak, checkinStreak } from '../utils/stats';
 import { PHASES, REPLACEMENT_STRATEGIES } from '../data/phases';
+import CheckInBanner from '../components/CheckInBanner';
+import MoneySavedCard from '../components/MoneySavedCard';
+import HealthTimelineCard from '../components/HealthTimelineCard';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -28,21 +31,79 @@ export default function DashboardScreen({ navigation }) {
   const [logs, setLogs] = useState([]);
   const [phase, setPhase] = useState(1);
   const [timeSince, setTimeSince] = useState(null);
+  const [settings, setSettings] = useState(null);
+  const [todayCheckin, setTodayCheckin] = useState(null);
+  const [checkInStreakCount, setCheckInStreakCount] = useState(0);
+  const [purchases, setPurchases] = useState([]);
   const [tip] = useState(
     () => REPLACEMENT_STRATEGIES[Math.floor(Math.random() * REPLACEMENT_STRATEGIES.length)]
   );
+  const [toastMessage, setToastMessage] = useState(null);
+  const toastAnim = useRef(new Animated.Value(0)).current;
 
-  useFocusEffect(
-    useCallback(() => {
-      (async () => {
-        const allLogs = await getLogs();
-        const phaseData = await getPhaseData();
-        setLogs(allLogs);
-        setPhase(phaseData.currentPhase);
-        setTimeSince(getTimeSince(allLogs));
-      })();
-    }, [])
-  );
+  const showToast = (message) => {
+    setToastMessage(message);
+    Animated.sequence([
+      Animated.timing(toastAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.delay(4000),
+      Animated.timing(toastAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start(() => setToastMessage(null));
+  };
+
+  const loadData = async () => {
+    const [allLogs, phaseData, s, checkin, allCheckins, allPurchases] = await Promise.all([
+      getLogs(),
+      getPhaseData(),
+      getSettings(),
+      getTodayCheckin(),
+      getCheckins(),
+      getPurchases(),
+    ]);
+    setLogs(allLogs);
+    setPhase(phaseData.currentPhase);
+    setTimeSince(getTimeSince(allLogs));
+    setSettings(s);
+    setTodayCheckin(checkin);
+    setCheckInStreakCount(checkinStreak(allCheckins));
+    setPurchases(allPurchases);
+  };
+
+  useFocusEffect(useCallback(() => { loadData(); }, []));
+
+  const handleCheckIn = async (stuckToRules) => {
+    await addCheckin(stuckToRules);
+    if (!stuckToRules && settings?.quitReasons?.length > 0) {
+      const reason = settings.quitReasons[Math.floor(Math.random() * settings.quitReasons.length)];
+      showToast(reason);
+    }
+    loadData();
+  };
+
+  const handleLogPurchase = () => {
+    Alert.prompt(
+      'Log Purchase',
+      'How much did you spend?',
+      [
+        { text: 'Cancel', },
+        {
+          text: 'Submit',
+          onPress: async (value) => {
+            const amount = parseFloat(value);
+            if (isNaN(amount) || amount <= 0) {
+              Alert.alert('Invalid amount', 'Please enter a valid number.');
+              return;
+            }
+            await addPurchase(amount);
+            loadData();
+            Alert.alert('Purchase Logged', `$${amount.toFixed(2)} recorded.`);
+          },
+        },
+      ],
+      'plain-text',
+      '',
+      'decimal-pad'
+    );
+  };
 
   // Live timer update every minute
   useEffect(() => {
@@ -62,10 +123,19 @@ export default function DashboardScreen({ navigation }) {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.content}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Greeting */}
         <Text style={styles.greeting}>{getGreeting()}</Text>
+
+        {/* Tip */}
         <Text style={styles.tip}>{tip}</Text>
+
+        {/* Daily Check-in */}
+        <CheckInBanner
+          todayCheckin={todayCheckin}
+          streak={checkInStreakCount}
+          onCheckIn={handleCheckIn}
+        />
 
         {/* Hero Streak */}
         <View style={styles.streakCard}>
@@ -82,6 +152,15 @@ export default function DashboardScreen({ navigation }) {
             </View>
           )}
         </View>
+
+        {/* Money Spent on Vapes */}
+        <MoneySavedCard purchases={purchases} />
+
+        {/* Health Timeline */}
+        <HealthTimelineCard
+          quitDate={settings?.quitDate}
+          onPress={() => navigation.navigate('HealthTimeline')}
+        />
 
         {/* Phase Pill */}
         <View style={styles.phasePill}>
@@ -110,23 +189,39 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.statLabel}>Night</Text>
           </View>
         </View>
-      </View>
 
-      {/* Floating Log Buttons */}
-      <View style={styles.floatingBtns}>
-        <TouchableOpacity
-          style={[styles.logBtn, styles.cravingBtn]}
-          onPress={() => navigation.navigate('Log', { type: 'craving' })}
+        {/* Log Buttons */}
+        <View style={styles.logBtns}>
+          <TouchableOpacity
+            style={[styles.logBtn, styles.cravingBtn]}
+            onPress={() => navigation.navigate('Log', { type: 'craving' })}
+          >
+            <Text style={styles.logBtnLabel}>Log Craving</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.logBtn, styles.sessionBtn]}
+            onPress={() => navigation.navigate('Log', { type: 'vape_session' })}
+          >
+            <Text style={styles.logBtnLabel}>Log Smoke</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      {/* Toast */}
+      {toastMessage && (
+        <Animated.View
+          style={[
+            styles.toast,
+            {
+              opacity: toastAnim,
+              transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }],
+            },
+          ]}
         >
-          <Text style={styles.logBtnLabel}>Log Craving</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.logBtn, styles.sessionBtn]}
-          onPress={() => navigation.navigate('Log', { type: 'vape_session' })}
-        >
-          <Text style={styles.logBtnLabel}>Log Vape</Text>
-        </TouchableOpacity>
-      </View>
+          <Text style={styles.toastLabel}>Reminder:</Text>
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -136,8 +231,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FAFAFA',
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  content: {
     padding: 24,
     paddingTop: 64,
   },
@@ -254,6 +351,19 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
+  purchaseBtn: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  purchaseBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#E65100',
+  },
+
   // Stats
   sectionTitle: {
     fontSize: 16,
@@ -291,14 +401,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Floating Buttons
-  floatingBtns: {
-    position: 'absolute',
-    bottom: 100,
-    left: 24,
-    right: 24,
+  // Log Buttons
+  logBtns: {
     flexDirection: 'row',
     gap: 12,
+    marginTop: 16,
+    paddingBottom: 20,
   },
   logBtn: {
     flex: 1,
@@ -321,5 +429,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#4A148C',
+  },
+
+  // Toast
+  toast: {
+    position: 'absolute',
+    top: 70,
+    left: 24,
+    right: 24,
+    backgroundColor: '#6A1B9A',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  toastLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#D9B9E2',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  toastText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+    fontStyle: 'italic',
   },
 });

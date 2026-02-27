@@ -65,12 +65,19 @@ export function bedFreeStreak(allLogs) {
   return streak;
 }
 
-// Get past 7 days stats for chart
-export function getWeeklyStats(logs) {
+// Get past N days stats for chart (null = all time)
+export function getWeeklyStats(logs, numDays = 7) {
   const days = [];
   const today = startOfDay(new Date());
 
-  for (let i = 6; i >= 0; i--) {
+  let totalDays = numDays || 7;
+  if (!numDays && logs.length > 0) {
+    const sorted = [...logs].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const earliest = startOfDay(new Date(sorted[0].timestamp));
+    totalDays = Math.max(1, Math.floor((today - earliest) / (24 * 60 * 60 * 1000)) + 1);
+  }
+
+  for (let i = totalDays - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     const key = dateKey(d);
@@ -78,7 +85,9 @@ export function getWeeklyStats(logs) {
 
     days.push({
       date: key,
-      label: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      label: totalDays <= 7
+        ? d.toLocaleDateString('en-US', { weekday: 'short' })
+        : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       sessions: countByType(dayLogs, 'vape_session'),
       cravings: countByType(dayLogs, 'craving'),
       nightWakes: nightWakeCount(dayLogs),
@@ -86,6 +95,38 @@ export function getWeeklyStats(logs) {
   }
 
   return days;
+}
+
+// Craving counts per day for past N days
+export function getCravingTrend(logs, days = 14) {
+  const result = [];
+  const today = startOfDay(new Date());
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const key = dateKey(d);
+    const count = logs.filter(l => l.type === 'craving' && dateKey(l.timestamp) === key).length;
+    result.push({ date: key, label: d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), count });
+  }
+  return result;
+}
+
+// Check-in streak: consecutive days with stuckToRules === true
+export function checkinStreak(checkins) {
+  if (checkins.length === 0) return 0;
+  const sorted = [...checkins].sort((a, b) => b.date.localeCompare(a.date));
+  const today = dateKey(new Date());
+  let streak = 0;
+  const startDay = sorted[0].date === today ? 0 : 1;
+  for (let i = startDay; i <= 365; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = dateKey(d);
+    const checkin = sorted.find(c => c.date === key);
+    if (!checkin || !checkin.stuckToRules) break;
+    streak++;
+  }
+  return streak;
 }
 
 // Summary for the week

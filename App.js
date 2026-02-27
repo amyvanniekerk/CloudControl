@@ -15,6 +15,8 @@ import DashboardScreen from './src/screens/DashboardScreen';
 import LogScreen from './src/screens/LogScreen';
 import StatsScreen from './src/screens/StatsScreen';
 import PhaseScreen from './src/screens/PhaseScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import HealthTimelineScreen from './src/screens/HealthTimelineScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -135,6 +137,13 @@ function HomeTabs() {
           tabBarIcon: ({ color, size }) => <Ionicons name="flag-outline" size={size} color={color} />,
         }}
       />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" size={size} color={color} />,
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -153,6 +162,11 @@ export default function App() {
         <Stack.Screen
           name="Log"
           component={LogScreen}
+          options={{ presentation: 'modal' }}
+        />
+        <Stack.Screen
+          name="HealthTimeline"
+          component={HealthTimelineScreen}
           options={{ presentation: 'modal' }}
         />
       </Stack.Navigator>

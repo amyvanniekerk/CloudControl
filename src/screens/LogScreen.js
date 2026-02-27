@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,9 @@ import {
   Switch,
   Alert,
 } from 'react-native';
-import { addLog } from '../storage/store';
+import { useFocusEffect } from '@react-navigation/native';
+import { addLog, getSettings } from '../storage/store';
+import QuitReasonCard from '../components/QuitReasonCard';
 
 const TRIGGERS = ['Craving', 'Habit', 'Stress', 'Boredom', 'Social', 'Other'];
 const LOCATIONS = [
@@ -26,6 +28,16 @@ export default function LogScreen({ route, navigation }) {
   const [location, setLocation] = useState('other');
   const [isNightWake, setIsNightWake] = useState(false);
   const [dragCount, setDragCount] = useState(3);
+  const [quitReasons, setQuitReasons] = useState([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const s = await getSettings();
+        setQuitReasons(s.quitReasons || []);
+      })();
+    }, [])
+  );
 
   const handleSave = async () => {
     const entry = {
@@ -48,7 +60,7 @@ export default function LogScreen({ route, navigation }) {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>
-        {isSession ? 'Log Vape Session' : 'Log Craving'}
+        {isSession ? 'Log Smoke Session' : 'Log Craving'}
       </Text>
 
       {/* Trigger */}
@@ -66,7 +78,7 @@ export default function LogScreen({ route, navigation }) {
       </View>
 
       {/* Location */}
-      <Text style={styles.label}>Where are you?</Text>
+      <Text style={styles.label}>Whats your environment?</Text>
       <View style={styles.chipRow}>
         {LOCATIONS.map((l) => (
           <TouchableOpacity
@@ -84,7 +96,7 @@ export default function LogScreen({ route, navigation }) {
       {/* Night Wake */}
       <View style={styles.switchRow}>
         <Text style={styles.label}>Night wake?</Text>
-        <Switch value={isNightWake} onValueChange={setIsNightWake} />
+        <Switch value={isNightWake} onValueChange={setIsNightWake} trackColor={{ false: '#DDD', true: '#D9B9E2' }} thumbColor={isNightWake ? '#9C27B0' : '#f4f3f4'} />
       </View>
 
       {/* Drag Count (vape sessions only) */}
@@ -135,14 +147,14 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     color: '#333',
-    marginBottom: 24,
+      textAlign: 'center',
   },
   label: {
     fontSize: 15,
     fontWeight: '600',
     color: '#555',
-    marginBottom: 8,
-    marginTop: 16,
+    marginBottom: 16,
+    marginTop: 10,
   },
   chipRow: {
     flexDirection: 'row',
@@ -156,7 +168,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEEEEE',
   },
   chipActive: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#9C27B0',
   },
   chipText: {
     fontSize: 14,
@@ -186,7 +198,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dragBtnActive: {
-    backgroundColor: '#EF5350',
+    backgroundColor: '#7B1FA2',
   },
   dragText: {
     fontSize: 16,
@@ -197,11 +209,16 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   saveBtn: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#9C27B0',
     borderRadius: 16,
     padding: 18,
     alignItems: 'center',
     marginTop: 32,
+    shadowColor: '#9C27B0',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   saveBtnText: {
     color: '#fff',
